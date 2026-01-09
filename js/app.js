@@ -153,14 +153,21 @@ async function loadDashboard() {
 
     console.log(`Fetching Data: ${firstDay} to ${nextMonth}`);
 
+    // Yearly Range
+    const startOfYear = `${now.getFullYear()}-01-01`;
+    const endOfYear = `${now.getFullYear() + 1}-01-01`;
+
     // Parallel fetch for efficiency
-    const [resExpenses, resBudgets, resAccounts] = await Promise.all([
+    const [resExpenses, resBudgets, resAccounts, resYearlyExpenses] = await Promise.all([
         supabase.from('expenses').select('*')
             .gte('date', firstDay)
             .lt('date', nextMonth)
             .order('date', { ascending: false }),
         supabase.from('budgets').select('amount_limit').eq('month', monthStr),
-        supabase.from('accounts').select('*').order('name')
+        supabase.from('accounts').select('*').order('name'),
+        supabase.from('expenses').select('category, amount')
+            .gte('date', startOfYear)
+            .lt('date', endOfYear)
     ]);
 
     if (resExpenses.error) console.error('Dashboard Expenses Error:', resExpenses.error);
@@ -170,6 +177,7 @@ async function loadDashboard() {
     const expenses = resExpenses.data || [];
     const budgets = resBudgets.data || [];
     const accounts = resAccounts.data || [];
+    const yearlyExpenses = resYearlyExpenses.data || [];
 
     // --- 0. Total Balance & Accounts ---
     const totalBalance = accounts.reduce((sum, item) => sum + parseFloat(item.balance), 0);
@@ -237,45 +245,24 @@ async function loadDashboard() {
     }
 
     // 3. Category Chart
-    const categoryTotals = {};
+    const categoryTotalsMonth = {};
     expenses.forEach(ex => {
-        categoryTotals[ex.category] = (categoryTotals[ex.category] || 0) + parseFloat(ex.amount);
+        categoryTotalsMonth[ex.category] = (categoryTotalsMonth[ex.category] || 0) + parseFloat(ex.amount);
     });
 
-
-
-
-    // Destroy previous chart instance if exists
-    if (window.myCategoryChart) {
-        window.myCategoryChart.destroy();
-    }
-
-    const ctx = document.getElementById('categoryChart').getContext('2d');
-    window.myCategoryChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(categoryTotals),
-            datasets: [{
-                data: Object.values(categoryTotals),
-                backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'right', labels: { color: '#94a3b8' } }
-            },
-            animation: {
-                animateScale: true,
-                animateRotate: true,
-                duration: 2000,
-                easing: 'easeOutQuart',
-                delay: 600 // Start after loader fades out
-            }
-        }
+    const categoryTotalsYear = {};
+    yearlyExpenses.forEach(ex => {
+        categoryTotalsYear[ex.category] = (categoryTotalsYear[ex.category] || 0) + parseFloat(ex.amount);
     });
+
+    // Store globally for switching
+    window.chartData = {
+        month: categoryTotalsMonth,
+        year: categoryTotalsYear
+    };
+
+    // Initial Render
+    updateChartPeriod('month');
 
     // 4. Recent List
     const listEl = document.getElementById('recent-expenses-list');
@@ -321,6 +308,64 @@ async function loadDashboard() {
         }
     }
 }
+
+
+// --- Chart Update Logic ---
+window.updateChartPeriod = (viewType) => {
+    // viewType: 'month' or 'year'
+    if (!window.chartData) return;
+
+    const data = window.chartData[viewType];
+    const labels = Object.keys(data);
+    const values = Object.values(data);
+
+    // Update Buttons
+    const btnMonth = document.getElementById('chart-tab-month');
+    const btnYear = document.getElementById('chart-tab-year');
+
+    const activeStyle = "background: var(--pk-card-bg); border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.1); color: var(--pk-text-primary); transition: all 0.2s;";
+    const inactiveStyle = "background: transparent; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--pk-text-muted); transition: all 0.2s;";
+
+    if (viewType === 'month') {
+        if (btnMonth) btnMonth.style.cssText = activeStyle;
+        if (btnYear) btnYear.style.cssText = inactiveStyle;
+    } else {
+        if (btnMonth) btnMonth.style.cssText = inactiveStyle;
+        if (btnYear) btnYear.style.cssText = activeStyle;
+    }
+
+    // Update Chart
+    if (window.myCategoryChart) {
+        window.myCategoryChart.destroy();
+    }
+
+    const ctx = document.getElementById('categoryChart').getContext('2d');
+    window.myCategoryChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right', labels: { color: '#94a3b8' } }
+            },
+            animation: {
+                animateScale: true,
+                animateRotate: true,
+                duration: 1000,
+                easing: 'easeOutQuart'
+            }
+        }
+    });
+
+};
 
 // --- Expenses Page Functions ---
 
@@ -483,17 +528,25 @@ async function loadBudgets() {
 
     // Date Logic
     const now = new Date();
+    const currentYear = now.getFullYear();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA');
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString('en-CA');
 
+    // Yearly Range
+    const startOfYear = `${currentYear}-01-01`;
+    const endOfYear = `${currentYear + 1}-01-01`;
+
     console.log(`Fetching Budgets Data: ${firstDay} to ${nextMonth}`);
 
-    // Parallel Fetch: Expenses (for actuals) and Budgets (for limits)
-    const [resExpenses, resBudgets] = await Promise.all([
+    // Parallel Fetch: Expenses (Monthly & Yearly) and Budgets
+    const [resExpenses, resBudgets, resYearlyExpenses] = await Promise.all([
         supabase.from('expenses').select('*')
             .gte('date', firstDay)
             .lt('date', nextMonth),
-        supabase.from('budgets').select('*').eq('month', monthStr)
+        supabase.from('budgets').select('*').eq('month', monthStr),
+        supabase.from('expenses').select('category, amount')
+            .gte('date', startOfYear)
+            .lt('date', endOfYear)
     ]);
 
     if (resExpenses.error) console.error("Expenses Error:", resExpenses.error);
@@ -501,12 +554,21 @@ async function loadBudgets() {
 
     const expenses = resExpenses.data || [];
     const budgets = resBudgets.data || [];
+    const yearlyExpenses = resYearlyExpenses.data || [];
 
-    // Calculate actuals per category
+    // Calculate actuals per category (Monthly)
     const actuals = {};
     if (expenses) {
         expenses.forEach(ex => {
             actuals[ex.category] = (actuals[ex.category] || 0) + parseFloat(ex.amount);
+        });
+    }
+
+    // Calculate yearly totals per category
+    const yearlyTotals = {};
+    if (yearlyExpenses) {
+        yearlyExpenses.forEach(ex => {
+            yearlyTotals[ex.category] = (yearlyTotals[ex.category] || 0) + parseFloat(ex.amount);
         });
     }
 
@@ -532,11 +594,12 @@ async function loadBudgets() {
         const limit = budgetItem ? parseFloat(budgetItem.amount_limit) : 0;
         const spent = actuals[cat] || 0;
         const percent = limit > 0 ? (spent / limit) * 100 : 0;
+        const yearTotal = yearlyTotals[cat] || 0;
 
         // Color Logic
         let barColor = 'var(--pk-primary)';
         let cardClass = 'card';
-        let statusText = '';
+        let statusText = ''; // Default status text
 
         if (percent > 0 && limit > 0) statusText = percent.toFixed(0) + '%';
 
@@ -562,11 +625,17 @@ async function loadBudgets() {
                 <span style="color: var(--pk-text-muted); font-size: 0.9rem;"> / ${formatCurrency(limit)}</span>
             </div>
 
-            <div style="width: 100%; height: 8px; background: var(--pk-bg); border-radius: 4px; overflow: hidden;">
+            <div style="width: 100%; height: 8px; background: var(--pk-bg); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
                 <div style="width: ${Math.min(percent, 100)}%; height: 100%; background: ${barColor}; transition: width 0.5s;"></div>
             </div>
-            <div style="font-size: 0.8rem; color: ${percent > 100 ? 'var(--pk-danger)' : 'var(--pk-text-muted)'}; margin-top: 5px; text-align: right; display:flex; justify-content:end;">
-                ${statusText}
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.8rem;">
+                 <div style="color: var(--pk-text-muted);">
+                    <i data-lucide="calendar-days" style="width:12px; vertical-align:middle;"></i> Year: ${formatCurrency(yearTotal)} / ${formatCurrency(limit * 12)}
+                 </div>
+                 <div style="color: ${percent > 100 ? 'var(--pk-danger)' : 'var(--pk-text-muted)'}; text-align: right;">
+                    ${statusText}
+                 </div>
             </div>
         `;
         grid.appendChild(card);
@@ -839,10 +908,50 @@ window.handleCategorySubmit = async (e) => {
 };
 
 window.deleteCategory = async (id) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
+    if (!confirm('Are you sure you want to delete this category? THIS WILL ALSO DELETE ALL LINKED EXPENSES AND BUDGETS!')) return;
+
+    // 1. Get Category Name first
+    const { data: catData, error: catFetchError } = await supabase
+        .from('categories')
+        .select('name')
+        .eq('id', id)
+        .single();
+
+    if (catFetchError) {
+        alert('Error fetching category details: ' + catFetchError.message);
+        return;
+    }
+
+    const categoryName = catData.name;
+
+    // 2. Delete linked Expenses
+    const { error: expError } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('category', categoryName);
+
+    if (expError) {
+        alert('Error deleting linked expenses: ' + expError.message);
+        return;
+    }
+
+    // 3. Delete linked Budgets
+    const { error: budError } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('category', categoryName);
+
+    if (budError) {
+        alert('Error deleting linked budgets: ' + budError.message);
+        return;
+    }
+
+    // 4. Finally delete the category
     const { error } = await supabase.from('categories').delete().eq('id', id);
-    if (error) alert('Error deleting: ' + error.message);
-    else {
+
+    if (error) {
+        alert('Error deleting category: ' + error.message);
+    } else {
         loadCategoriesPage();
         fetchCategories(); // Refresh global list
     }
