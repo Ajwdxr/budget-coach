@@ -4,7 +4,7 @@
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2><i data-lucide="receipt" style="vertical-align: middle; margin-right: 8px;"></i> Expenses</h2>
         <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
-            <input type="month" id="export-month" class="form-control" style="width: auto; padding: 6px 12px; height: 38px;">
+            <input type="month" id="filter-month" class="form-control" style="width: auto; padding: 6px 12px; height: 38px;" onchange="loadExpenses(this.value)">
             <button class="btn btn-outline" onclick="exportCSV()" style="margin-right: 0;">
                 <i data-lucide="download"></i> Export CSV
             </button>

@@ -369,10 +369,29 @@ window.updateChartPeriod = (viewType) => {
 
 // --- Expenses Page Functions ---
 
-async function loadExpenses() {
+window.loadExpenses = async function (monthStr = null) {
+    const filterEl = document.getElementById('filter-month');
+
+    // Determine month: Argument -> Picker Value -> Current Month
+    if (!monthStr && filterEl && filterEl.value) {
+        monthStr = filterEl.value;
+    }
+    if (!monthStr) {
+        monthStr = new Date().toISOString().slice(0, 7);
+        if (filterEl) filterEl.value = monthStr;
+    }
+
+    // Calculate Date Range
+    const firstDay = monthStr + '-01';
+    const date = new Date(firstDay);
+    date.setMonth(date.getMonth() + 1);
+    const nextMonth = date.toISOString().slice(0, 10);
+
     const { data: expenses, error } = await supabase
         .from('expenses')
         .select('*')
+        .gte('date', firstDay)
+        .lt('date', nextMonth)
         .order('date', { ascending: false });
 
     if (error) {
@@ -472,7 +491,7 @@ window.deleteExpense = async (id) => {
 };
 
 window.exportCSV = async () => {
-    const monthInput = document.getElementById('export-month');
+    const monthInput = document.getElementById('filter-month');
     const monthVal = monthInput ? monthInput.value : null;
 
     let query = supabase.from('expenses').select('*').order('date', { ascending: false });
