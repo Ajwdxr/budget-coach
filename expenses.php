@@ -29,8 +29,30 @@
                 </thead>
                 <tbody id="expenses-list">
                     <!-- JS will populate -->
+                    <!-- Skeleton Rows -->
                     <tr>
-                        <td colspan="5" style="text-align: center; color: var(--pk-text-muted);">Loading expenses...</td>
+                        <td><div class="skeleton" style="height: 16px; width: 80px;"></div></td>
+                        <td><div class="skeleton" style="height: 24px; width: 100px; border-radius: 20px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 120px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 150px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 60px;"></div></td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td><div class="skeleton" style="height: 16px; width: 80px;"></div></td>
+                        <td><div class="skeleton" style="height: 24px; width: 90px; border-radius: 20px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 100px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 120px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 50px;"></div></td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td><div class="skeleton" style="height: 16px; width: 80px;"></div></td>
+                        <td><div class="skeleton" style="height: 24px; width: 110px; border-radius: 20px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 110px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 100px;"></div></td>
+                        <td><div class="skeleton" style="height: 16px; width: 70px;"></div></td>
+                        <td></td>
                     </tr>
                 </tbody>
             </table>

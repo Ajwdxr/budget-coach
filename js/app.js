@@ -9,12 +9,16 @@ let supabase;
 try {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     console.log('Supabase initialized');
+    if (window.AppLogger) AppLogger.info('Supabase client initialized', { url: SUPABASE_URL }, 'app');
 } catch (error) {
     console.error('Supabase initialization failed:', error);
+    if (window.AppLogger) AppLogger.error('Supabase initialization failed', { error: error.message }, 'app');
 }
 
 // Auth State Listener
 async function initAuthCheck() {
+    if (window.AppLogger) AppLogger.debug('Checking auth session', {}, 'auth');
+
     const { data: { session } } = await supabase.auth.getSession();
 
     // Check if we are on the login page (index.php)
@@ -22,17 +26,20 @@ async function initAuthCheck() {
 
     if (session) {
         // User is logged in
+        if (window.AppLogger) AppLogger.info('User authenticated', { user_id: session.user?.id, email: session.user?.email }, 'auth');
         if (isLoginPage) {
             window.location.href = 'dashboard.php';
         }
     } else {
         // User is not logged in
+        if (window.AppLogger) AppLogger.debug('No active session', { isLoginPage }, 'auth');
         if (!isLoginPage) {
             window.location.href = 'index.php';
         }
     }
 
     supabase.auth.onAuthStateChange((event, session) => {
+        if (window.AppLogger) AppLogger.info('Auth state changed', { event, user_id: session?.user?.id }, 'auth');
         if (event === 'SIGNED_IN') {
             if (isLoginPage) window.location.href = 'dashboard.php';
         }
@@ -44,13 +51,21 @@ async function initAuthCheck() {
 
 // Login Function
 async function signInWithProvider(provider) {
+    if (window.AppLogger) AppLogger.info('Login attempt', { provider }, 'auth');
+
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider,
         options: {
             redirectTo: window.location.origin + '/budget/dashboard.php'
         }
     });
-    if (error) console.error('Login error:', error);
+
+    if (error) {
+        console.error('Login error:', error);
+        if (window.AppLogger) AppLogger.error('Login failed', { provider, error: error.message }, 'auth');
+    } else {
+        if (window.AppLogger) AppLogger.info('OAuth redirect initiated', { provider }, 'auth');
+    }
 }
 
 // Make globally available
@@ -58,8 +73,16 @@ window.signInWithProvider = signInWithProvider;
 
 // Logout Function
 async function signOut() {
+    if (window.AppLogger) AppLogger.info('Logout initiated', {}, 'auth');
+
     const { error } = await supabase.auth.signOut();
-    if (error) console.error('Logout error:', error);
+
+    if (error) {
+        console.error('Logout error:', error);
+        if (window.AppLogger) AppLogger.error('Logout failed', { error: error.message }, 'auth');
+    } else {
+        if (window.AppLogger) AppLogger.info('Logout successful', {}, 'auth');
+    }
 }
 
 // Make globally available
@@ -142,7 +165,326 @@ async function fetchCategories() {
     window.EXPENSE_CATEGORIES = data.map(c => c.name);
 }
 
-// --- Dashboard Functions ---
+// --- UI Utilities ---
+
+window.showToast = (message, type = 'info') => {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    // Create Toast
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    // Icon based on type
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check-circle';
+    if (type === 'error') iconName = 'alert-triangle';
+
+    toast.innerHTML = `
+        <i data-lucide="${iconName}" style="width: 20px; height: 20px;"></i>
+        <div class="toast-content">${message}</div>
+    `;
+
+    container.appendChild(toast);
+    lucide.createIcons();
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.style.animation = 'toastFadeOut 0.4s forwards';
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
+};
+
+// ... existing code ...
+
+// Updated submit handlers to use Toast
+
+window.handleExpenseSubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('expense-id').value;
+    const amount = document.getElementById('amount').value;
+    const category = document.getElementById('category').value;
+    const date = document.getElementById('date').value;
+    const merchant = document.getElementById('merchant').value;
+    const notes = document.getElementById('notes').value;
+    const account_id = document.getElementById('account-id') ? document.getElementById('account-id').value : null;
+
+    const user = (await supabase.auth.getUser()).data.user;
+    const action = id ? 'update' : 'create';
+
+    if (window.AppLogger) AppLogger.info(`Expense ${action} attempt`, { id, amount, category, date }, 'expense');
+
+    const payload = {
+        user_id: user.id,
+        amount,
+        category,
+        date,
+        merchant,
+        notes,
+        account_id: account_id || null
+    };
+
+    let error;
+    if (id) {
+        const { error: err } = await supabase.from('expenses').update(payload).eq('id', id);
+        error = err;
+    } else {
+        const { error: err } = await supabase.from('expenses').insert([payload]);
+        error = err;
+    }
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error(`Expense ${action} failed`, { error: error.message, payload }, 'expense');
+        showToast('Error saving expense: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info(`Expense ${action} successful`, { id, amount, category }, 'expense');
+        if (typeof closeExpenseModal === 'function') closeExpenseModal();
+        loadExpenses();
+        showToast('Expense saved successfully!', 'success');
+    }
+};
+
+window.handleCategorySubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('category-name').value;
+    const user = (await supabase.auth.getUser()).data.user;
+
+    if (window.AppLogger) AppLogger.info('Category create attempt', { name }, 'category');
+
+    const { error } = await supabase.from('categories').insert([{
+        user_id: user.id,
+        name: name
+    }]);
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error('Category create failed', { error: error.message, name }, 'category');
+        showToast('Error saving category: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info('Category created successfully', { name }, 'category');
+        if (typeof closeCategoryModal === 'function') closeCategoryModal();
+        loadCategoriesPage();
+        fetchCategories(); // Refresh global list
+        showToast('Category added successfully!', 'success');
+    }
+};
+
+window.deleteCategory = async (id) => {
+    if (!confirm('Are you sure you want to delete this category? THIS WILL ALSO DELETE ALL LINKED EXPENSES AND BUDGETS!')) return;
+
+    if (window.AppLogger) AppLogger.info('Category delete initiated', { id }, 'category');
+
+    // 1. Get Category Name first
+    const { data: catData, error: catFetchError } = await supabase
+        .from('categories')
+        .select('name')
+        .eq('id', id)
+        .single();
+
+    if (catFetchError) {
+        if (window.AppLogger) AppLogger.error('Category fetch failed', { id, error: catFetchError.message }, 'category');
+        showToast('Error fetching category details: ' + catFetchError.message, 'error');
+        return;
+    }
+
+    const categoryName = catData.name;
+    if (window.AppLogger) AppLogger.debug('Deleting linked data', { categoryName }, 'category');
+
+    // 2. Delete linked Expenses
+    const { error: expError } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('category', categoryName);
+
+    if (expError) {
+        if (window.AppLogger) AppLogger.error('Delete linked expenses failed', { categoryName, error: expError.message }, 'category');
+        showToast('Error deleting linked expenses: ' + expError.message, 'error');
+        return;
+    }
+
+    // 3. Delete linked Budgets
+    const { error: budError } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('category', categoryName);
+
+    if (budError) {
+        if (window.AppLogger) AppLogger.error('Delete linked budgets failed', { categoryName, error: budError.message }, 'category');
+        showToast('Error deleting linked budgets: ' + budError.message, 'error');
+        return;
+    }
+
+    // 4. Finally delete the category
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error('Category delete failed', { id, error: error.message }, 'category');
+        showToast('Error deleting category: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info('Category deleted successfully', { id, categoryName }, 'category');
+        loadCategoriesPage();
+        fetchCategories(); // Refresh global list
+        showToast('Category deleted successfully!', 'success');
+    }
+};
+
+window.handleAccountSubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('acc-id').value;
+    const name = document.getElementById('acc-name').value;
+    const type = document.getElementById('acc-type').value;
+    const balance = document.getElementById('acc-balance').value;
+    const user = (await supabase.auth.getUser()).data.user;
+    const action = id ? 'update' : 'create';
+
+    if (window.AppLogger) AppLogger.info(`Account ${action} attempt`, { id, name, type, balance }, 'account');
+
+    const payload = {
+        user_id: user.id,
+        name,
+        type,
+        balance
+    };
+
+    let error;
+    if (id) {
+        const { error: err } = await supabase.from('accounts').update(payload).eq('id', id);
+        error = err;
+    } else {
+        const { error: err } = await supabase.from('accounts').insert([payload]);
+        error = err;
+    }
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error(`Account ${action} failed`, { error: error.message, name }, 'account');
+        showToast('Error saving account: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info(`Account ${action} successful`, { id, name, type }, 'account');
+        closeAccountModal();
+        loadAccountsPage();
+        showToast('Account saved successfully!', 'success');
+    }
+};
+
+window.deleteAccount = async (id) => {
+    if (!confirm('Are you sure you want to delete this account? Expenses linked to it will remain but be unlinked.')) return;
+
+    if (window.AppLogger) AppLogger.info('Account delete initiated', { id }, 'account');
+
+    const { error } = await supabase.from('accounts').delete().eq('id', id);
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error('Account delete failed', { id, error: error.message }, 'account');
+        showToast('Error deleting: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info('Account deleted successfully', { id }, 'account');
+        loadAccountsPage();
+        showToast('Account deleted successfully', 'success');
+    }
+};
+
+window.handleBudgetSubmit = async (e) => {
+    e.preventDefault();
+    const category = document.getElementById('budget-category-hidden').value;
+    const limit = document.getElementById('budget-limit').value;
+    const monthStr = new Date().toISOString().slice(0, 7);
+    const user = (await supabase.auth.getUser()).data.user;
+
+    if (window.AppLogger) AppLogger.info('Budget set attempt', { category, limit, month: monthStr }, 'budget');
+
+    // Check if exists
+    const { data: existing } = await supabase.from('budgets').select('id').eq('category', category).eq('month', monthStr).single();
+    const action = existing ? 'update' : 'create';
+
+    let error;
+    if (existing) {
+        const { error: err } = await supabase.from('budgets').update({ amount_limit: limit }).eq('id', existing.id);
+        error = err;
+    } else {
+        const { error: err } = await supabase.from('budgets').insert([{
+            user_id: user.id,
+            category,
+            amount_limit: limit,
+            month: monthStr
+        }]);
+        error = err;
+    }
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error(`Budget ${action} failed`, { error: error.message, category }, 'budget');
+        showToast('Error saving budget: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info(`Budget ${action} successful`, { category, limit, month: monthStr }, 'budget');
+        closeBudgetModal();
+        loadBudgets(); // Refresh UI
+        showToast('Budget saved successfully!', 'success');
+    }
+};
+
+window.deleteExpense = async (id) => {
+    if (!confirm('Are you sure you want to delete this expense?')) return;
+
+    if (window.AppLogger) AppLogger.info('Expense delete initiated', { id }, 'expense');
+
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+
+    if (error) {
+        if (window.AppLogger) AppLogger.error('Expense delete failed', { id, error: error.message }, 'expense');
+        showToast('Error deleting: ' + error.message, 'error');
+    } else {
+        if (window.AppLogger) AppLogger.info('Expense deleted successfully', { id }, 'expense');
+        loadExpenses();
+        showToast('Expense deleted', 'success');
+    }
+};
+
+window.exportCSV = async () => {
+    const monthInput = document.getElementById('filter-month');
+    const monthVal = monthInput ? monthInput.value : null;
+
+    let query = supabase.from('expenses').select('*').order('date', { ascending: false });
+
+    if (monthVal) {
+        // Calculate First and Last Day
+        const firstDay = monthVal + '-01';
+        // Calculate next month for exclusive upper bound
+        const date = new Date(monthVal + '-01');
+        date.setMonth(date.getMonth() + 1);
+        const nextMonth = date.toISOString().slice(0, 10);
+
+        query = query.gte('date', firstDay).lt('date', nextMonth);
+        console.log(`Exporting for: ${firstDay} to ${nextMonth}`);
+    }
+
+    const { data: expenses, error } = await query;
+
+    if (error) {
+        showToast("Error exporting: " + error.message, 'error');
+        return;
+    }
+
+    if (!expenses || expenses.length === 0) {
+        showToast("No expenses found for export.", 'info');
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Date,Amount,Category,Merchant,Notes\n";
+
+    expenses.forEach(row => {
+        csvContent += `${row.date},${row.amount},${row.category},${row.merchant || ''},${row.notes || ''}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    // Add month to filename if selected
+    const filename = monthVal ? `expenses_${monthVal}.csv` : "expenses_export.csv";
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link); // Clean up
+    showToast('Export started!', 'success');
+};
 
 async function loadDashboard() {
     // Date Logic: First day of current month to first day of next month
@@ -366,6 +708,7 @@ window.updateChartPeriod = (viewType) => {
     });
 
 };
+
 
 // --- Expenses Page Functions ---
 
@@ -983,6 +1326,15 @@ window.initializePage = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     const userInfoEl = document.getElementById('user-info');
     if (userInfoEl) userInfoEl.innerText = user.email;
+
+    // Sidebar User Info
+    const sidebarNameEl = document.getElementById('sidebar-user-name');
+    if (sidebarNameEl) sidebarNameEl.innerText = user.email;
+
+    const sidebarAvatarEl = document.querySelector('.user-avatar');
+    if (sidebarAvatarEl && user.email) {
+        sidebarAvatarEl.innerHTML = user.email.charAt(0).toUpperCase();
+    }
 
     // Fetch Categories first
     await fetchCategories();

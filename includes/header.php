@@ -15,6 +15,9 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Client Logger -->
+    <script src="js/logger.js"></script>
+
     <!-- App Styles -->
     <link rel="stylesheet" href="css/style.css">
     
@@ -48,20 +51,62 @@
     $current_page = basename($_SERVER['PHP_SELF']);
     if ($current_page !== 'index.php'):
     ?>
-        <div class="app-container">
-            <header>
-                <div class="brand">
-                    <i data-lucide="wallet"></i> Budget Coach
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" onclick="toggleSidebar()">
+            <i data-lucide="menu"></i>
+        </button>
+
+        <div class="app-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="appSidebar">
+                <div class="sidebar-header">
+                    <a href="dashboard.php" class="brand">
+                        <i data-lucide="wallet"></i> Budget Coach
+                    </a>
                 </div>
-                <nav>
-                    <ul>
-                        <li><a href="dashboard.php" class="<?= $current_page == 'dashboard.php' ? 'active' : '' ?>">Dashboard</a></li>
-                        <li><a href="expenses.php" class="<?= $current_page == 'expenses.php' ? 'active' : '' ?>">Expenses</a></li>
-                        <li><a href="budgets.php" class="<?= $current_page == 'budgets.php' ? 'active' : '' ?>">Budgets</a></li>
-                        <li><a href="categories.php" class="<?= $current_page == 'categories.php' ? 'active' : '' ?>">Categories</a></li>
-                        <li><a href="accounts.php" class="<?= $current_page == 'accounts.php' ? 'active' : '' ?>">Accounts</a></li>
-                        <li><a href="#" onclick="signOut()">Logout</a></li>
-                    </ul>
+
+                <nav class="sidebar-nav">
+                    <a href="dashboard.php" class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>">
+                        <i data-lucide="layout-dashboard"></i> Dashboard
+                    </a>
+                    <a href="expenses.php" class="nav-link <?= $current_page == 'expenses.php' ? 'active' : '' ?>">
+                        <i data-lucide="receipt"></i> Expenses
+                    </a>
+                    <a href="budgets.php" class="nav-link <?= $current_page == 'budgets.php' ? 'active' : '' ?>">
+                        <i data-lucide="pie-chart"></i> Budgets
+                    </a>
+                    <a href="categories.php" class="nav-link <?= $current_page == 'categories.php' ? 'active' : '' ?>">
+                        <i data-lucide="tags"></i> Categories
+                    </a>
+                    <a href="accounts.php" class="nav-link <?= $current_page == 'accounts.php' ? 'active' : '' ?>">
+                        <i data-lucide="credit-card"></i> Accounts
+                    </a>
                 </nav>
-            </header>
-        <?php endif; ?>
+
+                <div class="sidebar-footer">
+                    <div class="user-profile" onclick="signOut()" style="cursor: pointer;">
+                        <div class="user-avatar">
+                            <i data-lucide="user"></i>
+                        </div>
+                        <div class="user-info">
+                            <div class="user-name" id="sidebar-user-name">Loading...</div>
+                            <div class="user-role">Sign Out</div>
+                        </div>
+                        <i data-lucide="log-out" style="width: 16px; height: 16px; color: var(--pk-text-muted);"></i>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <div class="main-content">
+                <!-- Overlay for mobile when sidebar is open -->
+                <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <?php endif; ?>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            sidebar.classList.toggle('active');
+        }
+    </script>
