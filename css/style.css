@@ -364,7 +364,7 @@ body.auth-page .app-layout {
 /* Floating Action Button (FAB) */
 .fab {
   position: fixed;
-  bottom: 30px;
+  bottom: 80px;
   right: 30px;
   width: 60px;
   height: 60px;
@@ -670,7 +670,7 @@ body.auth-page .app-layout {
 
   /* Floating Action Button adjustments */
   .fab {
-    bottom: 20px;
+    bottom: 70px;
     right: 20px;
     width: 50px;
     height: 50px;
@@ -728,4 +728,78 @@ body.auth-page .app-layout {
   background-color: rgba(239, 68, 68, 0.1);
   color: var(--pk-danger);
   border-color: var(--pk-danger);
+}
+
+/* App Footer */
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 280px;
+  right: 0;
+  padding: 16px 40px;
+  border-top: 1px solid var(--pk-border);
+  background: var(--pk-surface-glass);
+  backdrop-filter: blur(20px);
+  z-index: 50;
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.github-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--pk-border);
+  color: var(--pk-text-muted);
+  transition: all 0.3s ease;
+}
+
+.github-link:hover {
+  background: var(--pk-primary);
+  border-color: var(--pk-primary);
+  color: white;
+  transform: scale(1.1);
+}
+
+.github-link i {
+  width: 20px;
+  height: 20px;
+}
+
+.footer-credit {
+  color: var(--pk-text-muted);
+  font-size: 0.9rem;
+}
+
+.footer-credit a {
+  color: var(--pk-primary);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.footer-credit a:hover {
+  color: var(--pk-accent);
+  text-decoration: underline;
+}
+
+/* Hide footer on auth pages */
+body.auth-page .app-footer {
+  display: none;
+}
+
+/* Mobile Footer */
+@media (max-width: 768px) {
+  .app-footer {
+    left: 0;
+    padding: 12px 20px;
+  }
 }

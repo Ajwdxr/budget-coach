@@ -18,4 +18,10 @@
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
+<!-- App Logic -->
+<script src="js/app.js" type="module"></script>
+<script>
+    lucide.createIcons();
+</script>
+</body>
+</html>
