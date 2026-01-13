@@ -486,6 +486,119 @@ window.exportCSV = async () => {
     showToast('Export started!', 'success');
 };
 
+window.downloadPDF = async () => {
+    // Check if library is loaded
+    if (typeof html2pdf === 'undefined') {
+        // Try to load it dynamically if missing or wait? 
+        // Expenses.php includes it, so it should be there.
+        showToast('PDF library filtering...', 'info');
+        // Small delay to ensure script load if just navigated? 
+        // Actually if it's undefined, it's likely not loaded.
+        showToast('PDF library not ready. Please refresh.', 'error');
+        return;
+    }
+
+    const monthInput = document.getElementById('filter-month');
+    const monthVal = monthInput ? monthInput.value : new Date().toISOString().slice(0, 7);
+
+    showToast('Generating PDF Report...', 'info');
+
+    // Filter Logic Same as Export
+    const firstDay = monthVal + '-01';
+    const date = new Date(firstDay);
+    date.setMonth(date.getMonth() + 1);
+    const nextMonth = date.toISOString().slice(0, 10);
+
+    const { data: expenses, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('date', firstDay)
+        .lt('date', nextMonth)
+        .order('date', { ascending: false });
+
+    if (error) {
+        showToast('Error fetching data: ' + error.message, 'error');
+        return;
+    }
+
+    if (!expenses || expenses.length === 0) {
+        showToast('No expenses found to report.', 'warning');
+        return;
+    }
+
+    // Fetch budgets for this month
+    const { data: budgets, error: budgetError } = await supabase
+        .from('budgets')
+        .select('amount_limit')
+        .eq('month', monthVal);
+
+    const totalBudget = budgets ? budgets.reduce((sum, b) => sum + parseFloat(b.amount_limit), 0) : 0;
+
+    // 1. Populate Template
+    document.getElementById('pdf-period').innerText = `Period: ${monthVal}`;
+
+    const totalAmount = expenses.reduce((sum, ex) => sum + parseFloat(ex.amount), 0);
+    const budgetRemaining = totalBudget - totalAmount;
+
+    document.getElementById('pdf-total').innerText = formatCurrency(totalAmount);
+    document.getElementById('pdf-budget').innerText = formatCurrency(totalBudget);
+
+    // Budget Remaining with color coding
+    const remainingEl = document.getElementById('pdf-remaining');
+    remainingEl.innerText = formatCurrency(budgetRemaining);
+    remainingEl.style.color = budgetRemaining < 0 ? '#ef4444' : '#10b981'; // Red if over budget
+
+    document.getElementById('pdf-count').innerText = expenses.length;
+    document.getElementById('pdf-generated-date').innerText = new Date().toLocaleString();
+
+    const listBody = document.getElementById('pdf-list');
+    listBody.innerHTML = expenses.map(ex => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 12px; color: #475569;">${ex.date}</td>
+            <td style="padding: 12px;"><span style="background:#f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #475569;">${ex.category}</span></td>
+            <td style="padding: 12px;">
+                <div style="font-weight: 600; color: #1e293b;">${ex.merchant || '-'}</div>
+                <div style="font-size: 11px; color: #94a3b8;">${ex.notes || ''}</div>
+            </td>
+            <td style="padding: 12px; text-align: right; font-weight: 600; color: #0f172a;">${formatCurrency(ex.amount)}</td>
+        </tr>
+    `).join('');
+
+    // 2. Clone and Render
+    const element = document.getElementById('pdf-report');
+
+    // We clone it to put it in a visible container off-screen to ensure width is desktop-like (A4)
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-10000px';
+    container.style.top = '0';
+    container.style.width = '800px'; // Fixed width for consistent PDF layout
+    container.style.zIndex = '-100';
+
+    const clone = element.cloneNode(true);
+    clone.style.display = 'block'; // Make visible
+    container.appendChild(clone);
+    document.body.appendChild(container);
+
+    const opt = {
+        margin: [10, 10, 10, 10], // top, left, bottom, right
+        filename: `Expense_Report_${monthVal}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+        await html2pdf().set(opt).from(clone).save();
+        showToast('PDF downloaded successfully!', 'success');
+    } catch (err) {
+        console.error('PDF Generation Error:', err);
+        showToast('Failed to generate PDF.', 'error');
+    } finally {
+        document.body.removeChild(container);
+    }
+};
+
 async function loadDashboard() {
     // Date Logic: First day of current month to first day of next month
     const now = new Date();

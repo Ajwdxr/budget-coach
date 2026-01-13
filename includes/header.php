@@ -15,12 +15,12 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Client Logger -->
-    <script src="js/logger.js"></script>
-
     <!-- App Styles -->
     <link rel="stylesheet" href="css/style.css">
     
+    <!-- html2pdf for PDF export -->
+    <script src="js/html2pdf.bundle.min.js"></script>
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 </head>
